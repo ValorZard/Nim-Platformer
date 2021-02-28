@@ -8,7 +8,7 @@ import strformat
 
 # player states
 type States {.pure.} = enum # can only use what i explicitly typed out
-  Moving, Ground, Turnaround
+  Moving, Ground, Turnaround, Jump, Air, AirMoving
 
 # base types
 type
@@ -30,48 +30,18 @@ type
     groundAccel: int
     maxGroundSpeed: int
     # vertical physics
+    airAccel: int
+    maxAirSpeed: int
     jumpForce: int
     terminalVelocity: int
     gravity: int
     # friction
     staticFriction: int # should be strong to stop quickly
     kineticFriction: int # should be weak to facilitate movement
+    drag: int # air friction
 
   PlayerInput = ref object of RootObj
     pressedLeft, pressedRight, jumpPressed : bool
-
-#[
-# player inputs
-var playerX  = screenWidth div 2
-var playerY  = screenWidth div 2
-var playerWidth = 2
-var playerHeight = 2
-
-
-var playerState = States.Ground
-var facingRight = false
-
-# horizontal movement
-var player.velocity = Vec2i()
-
-var playerAcceleration = 2
-var maxSpeed = 5
-
-# vertical movement
-var jumpForce = 10
-var terminalVelocity = 3
-
-# physics variables
-var gravity = 2
-var staticFriction = 5 # should be strong to stop quickly
-var kineticFriction = 1 # should be weak to facilitate movement
-
-# input variables
-var pressedLeft = false
-var pressedRight = false
-
-var jumpPressed = false
-]#
 
 var player : Player
 var playerInput : PlayerInput
@@ -96,12 +66,16 @@ proc playerInit() =
     groundAccel : 2,
     maxGroundSpeed : 4,
 
+    airAccel : 2,
+    maxAirSpeed : 4,
+
     jumpForce : 10,
     terminalVelocity : 3,
     gravity : 2,
 
-    staticFriction : 5,
-    kineticFriction : 1,
+    staticFriction : 5, # grounded friction
+    kineticFriction : 1, # movement friction
+    drag : 1, # air friction essentially
   )
 
   player.hitbox = RectHitbox(
@@ -143,10 +117,22 @@ proc playerSetInput(player : Player, playerInput: PlayerInput) =
 
 
 proc playerMoveX(player : Player, playerInput: PlayerInput) =
+  let accel =
+    case player.state:
+    of States.Moving: player.groundAccel
+    of States.AirMoving: player.airAccel
+    else: 0
+  
+  let maxSpeed =
+    case player.state:
+    of States.Moving: player.maxGroundSpeed
+    of States.AirMoving: player.maxAirSpeed
+    else: 0
+  
   if playerInput.pressedLeft:
-    player.velocity.x -= (if player.velocity.x - player.groundAccel >= -player.maxGroundSpeed: player.groundAccel else: 0)
+    player.velocity.x -= (if player.velocity.x - accel >= -maxSpeed: accel else: 0)
   if playerInput.pressedRight:
-    player.velocity.x += (if player.velocity.x + player.groundAccel <= player.maxGroundSpeed: player.groundAccel else: 0)
+    player.velocity.x += (if player.velocity.x + accel <= maxSpeed: accel else: 0)
 
 
 proc playerFriction(player : Player) =
@@ -154,6 +140,8 @@ proc playerFriction(player : Player) =
     case player.state:
     of States.Moving: player.kineticFriction
     of States.Ground, States.Turnaround: player.staticFriction
+    of States.Air, States.AirMoving: player.drag
+    else: 0
   if player.velocity.x < 0:
     if player.velocity.x + friction > 0:
       player.velocity.x = 0
@@ -166,17 +154,20 @@ proc playerFriction(player : Player) =
       player.velocity.x -= friction
 
 
-proc playerJump(player : Player, playerInput: PlayerInput) =
-  if playerInput.jumpPressed:
-    player.velocity.y -= player.jumpForce
+proc playerJump(player : Player) =
+  player.velocity.y -= player.jumpForce
+
 
 
 proc playerGravity(player : Player) =
   player.velocity.y += (if player.velocity.y + player.gravity <= player.terminalVelocity: player.gravity else: 0)
 
-proc playerCheckCollision(player : Player, randomBox : RectHitbox) =
-  if overlaps(player.hitbox.transform, randomBox.transform) and not playerInput.jumpPressed:
+proc playerCheckCollision(player : Player, randomBox : RectHitbox) : bool =
+  if overlaps(player.hitbox.transform, randomBox.transform):
     player.velocity.y = 0
+    return true
+  else:
+    return false
 
 proc playerApplyVelocity(player : Player, dt: float32) =
   player.position.x += player.velocity.x
@@ -188,22 +179,32 @@ proc playerUpdateHitbox(player: Player) =
 
 proc gameUpdate(dt: float32) =
   playerSetInput(player, playerInput)
+
+  template changeToJump =
+    if (playerInput.jumpPressed):
+        player.state = States.Jump
+
+  template checkForGround =
+    if playerCheckCollision(player, randomBox):
+      player.state = States.Ground
+  
+  template checkForAir = 
+    if not playerCheckCollision(player, randomBox):
+      player.state = States.Air
+
   case player.state:
     of States.Ground:
-      playerGravity(player)
+      #echo "Ground"
       playerFriction(player)
 
       if (playerInput.pressedLeft or playerInput.pressedRight):
-      # the follow is to facilitate non slippery turnarounds.
-        if(playerInput.pressedRight != player.facingRight):
-          player.state = States.Turnaround
-          player.facingRight = playerInput.pressedRight
-        else:
-          player.state = States.Moving
+        player.state = States.Moving
+      
+      checkForAir()
+      changeToJump()
     of States.Moving:
       playerMoveX(player, playerInput)
       playerFriction(player)
-      playerGravity(player)
 
       if (playerInput.pressedLeft or playerInput.pressedRight):
       # the follow is to facilitate non slippery turnarounds.
@@ -212,18 +213,42 @@ proc gameUpdate(dt: float32) =
           player.facingRight = playerInput.pressedRight
       else:
         player.state = States.Ground
+
+      checkForAir()
+      changeToJump()
     of States.Turnaround:
       playerMoveX(player, playerInput)
       playerFriction(player)
-      playerGravity(player)
 
       if (playerInput.pressedLeft or playerInput.pressedRight):
         player.state = States.Moving
       else:
         player.state = States.Ground
+      
+      checkForAir()
+      changeToJump()
+    of States.Jump:
+      playerJump(player)
+      player.state = States.Air
+    of States.Air:
+      #echo "Air"
+      playerFriction(player)
+      playerGravity(player)
 
-  playerJump(player, playerInput)
-  playerCheckCollision(player, randomBox)
+      if (playerInput.pressedLeft or playerInput.pressedRight):
+        player.state = States.AirMoving
+      
+      checkForGround()
+    of States.AirMoving:
+      playerMoveX(player, playerInput)
+      playerFriction(player)
+      playerGravity(player)
+
+      if not (playerInput.pressedLeft or playerInput.pressedRight):
+        player.state = States.Air
+      
+      checkForGround()
+  
   playerApplyVelocity(player, dt)
   playerUpdateHitbox(player)
 
@@ -245,7 +270,13 @@ proc gameDraw() =
 
   # render text
   var debugStr : string = fmt"Pos: ({player.position.x}, {player.position.y})"
-  debugStr.add(fmt"Turnaround: {player.state == States.Turnaround}")
+  case player.state:
+    of States.Ground: debugStr.add("State: Ground")
+    of States.Moving: debugStr.add("State: Moving")
+    of States.Turnaround: debugStr.add("State: Turnaround")
+    of States.Jump: debugStr.add("State: Jump")
+    of States.Air: debugStr.add("State: Air")
+    of States.AirMoving: debugStr.add("State: AirMoving")
   printc(debugStr, screenWidth div 2, 2)
 
 nico.init("myOrg", "myApp")

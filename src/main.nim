@@ -194,7 +194,7 @@ proc playerGravity(player : Player) =
   player.velocity.y += (if player.velocity.y + player.gravity <= player.terminalVelocity: player.gravity else: 0)
 
 proc playerCheckCollision(player : Player, randomBox : RectHitbox) =
-  if overlaps(player.hitbox.transform, randomBox.transform):
+  if overlaps(player.hitbox.transform, randomBox.transform) and not playerInput.jumpPressed:
     player.velocity.y = 0
 
 proc playerApplyVelocity(player : Player, dt: float32) =

@@ -7,7 +7,7 @@ import strformat
 # this shouldn't be messy at all :)
 
 # player states
-type States = enum
+type States {.pure.} = enum # can only use what i explicitly typed out
   Moving, Ground, Turnaround
 
 # base types
@@ -40,8 +40,6 @@ type
   PlayerInput = ref object of RootObj
     pressedLeft, pressedRight, jumpPressed : bool
 
-proc `+`(a, b: Vec2i): Vec2i = 
-  Vec2i(x: a.x + b.x, y: a.y + b.y)
 #[
 # player inputs
 var playerX  = screenWidth div 2
@@ -96,7 +94,7 @@ proc playerInit() =
     velocity : Vec2i(),
 
     groundAccel : 2,
-    maxGroundSpeed : 5,
+    maxGroundSpeed : 4,
 
     jumpForce : 10,
     terminalVelocity : 3,
@@ -130,9 +128,9 @@ proc gameInit() =
 
   randomBox = RectHitbox(
     transform : Rect(
-      x : 60,
+      x : 10,
       y : 90,
-      w : 15,
+      w : 90,
       h : 5,
     ),
     isSolid : true,
@@ -161,32 +159,21 @@ proc playerMoveX(player : Player, playerInput: PlayerInput) =
     player.velocity.x += (if player.velocity.x + player.groundAccel <= player.maxGroundSpeed: player.groundAccel else: 0)
 
 
-proc playerFriction(player : Player, frictionType : char) =
-  case frictionType:
-    of 'g', 't': # grounded, turnaround
-      if player.velocity.x < 0:
-        if player.velocity.x + player.staticFriction > 0:
-          player.velocity.x = 0
-        else:
-          player.velocity.x += player.staticFriction
-      elif player.velocity.x > 0:
-        if player.velocity.x - player.staticFriction < 0:
-          player.velocity.x = 0
-        else:
-          player.velocity.x -= player.staticFriction
-    of 'm': # grounded moving
-      if player.velocity.x < 0:
-        if player.velocity.x + player.kineticFriction > 0:
-          player.velocity.x = 0
-        else:
-          player.velocity.x += player.kineticFriction
-      elif player.velocity.x > 0:
-        if player.velocity.x - player.kineticFriction < 0:
-          player.velocity.x = 0
-        else:
-          player.velocity.x -= player.kineticFriction
+proc playerFriction(player : Player) =
+  let friction = 
+    case player.state:
+    of States.Moving: player.kineticFriction
+    of States.Ground, States.Turnaround: player.staticFriction
+  if player.velocity.x < 0:
+    if player.velocity.x + friction > 0:
+      player.velocity.x = 0
     else:
-      echo "It will never come here. If it does, we have a problem."
+      player.velocity.x += friction
+  elif player.velocity.x > 0:
+    if player.velocity.x - friction < 0:
+      player.velocity.x = 0
+    else:
+      player.velocity.x -= friction
 
 
 proc playerJump(player : Player, playerInput: PlayerInput) =
@@ -215,14 +202,14 @@ proc gameUpdate(dt: float32) =
   case player.state:
     of States.Ground:
       playerGravity(player)
-      playerFriction(player, 'g')
+      playerFriction(player)
     of States.Moving:
       playerMoveX(player, playerInput)
-      playerFriction(player, 'm')
+      playerFriction(player)
       playerGravity(player)
     of States.Turnaround:
       playerMoveX(player, playerInput)
-      playerFriction(player, 't')
+      playerFriction(player)
       playerGravity(player)
   playerJump(player, playerInput)
   playerCheckCollision(player, randomBox)

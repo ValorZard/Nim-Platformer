@@ -8,7 +8,7 @@ import strformat
 
 # player states
 type States = enum
-  Moving, Still, Turnaround
+  Moving, Ground, Turnaround
 
 # base types
 type
@@ -50,7 +50,7 @@ var playerWidth = 2
 var playerHeight = 2
 
 
-var playerState = States.Still
+var playerState = States.Ground
 var facingRight = false
 
 # horizontal movement
@@ -90,7 +90,7 @@ proc playerInit() =
     width : 2,
     height : 2,
 
-    state : States.Still,
+    state : States.Ground,
     facingRight : false,
 
     velocity : Vec2i(),
@@ -145,13 +145,14 @@ proc playerSetInput(player : Player, playerInput: PlayerInput) =
 
 proc playerSetStates(player : Player, playerInput: PlayerInput) =
   if (playerInput.pressedLeft or playerInput.pressedRight):
+    # the follow is to facilitate non slippery turnarounds.
     if(playerInput.pressedRight != player.facingRight):
       player.state = States.Turnaround
       player.facingRight = playerInput.pressedRight
     else:
       player.state = States.Moving
   else:
-    player.state = States.Still
+    player.state = States.Ground
 
 proc playerMoveX(player : Player, playerInput: PlayerInput) =
   if playerInput.pressedLeft:
@@ -160,29 +161,32 @@ proc playerMoveX(player : Player, playerInput: PlayerInput) =
     player.velocity.x += (if player.velocity.x + player.groundAccel <= player.maxGroundSpeed: player.groundAccel else: 0)
 
 
-proc playerFriction(player : Player) =
-  if player.state == States.Still or player.state == States.Turnaround:
-    if player.velocity.x < 0:
-      if player.velocity.x + player.staticFriction > 0:
-        player.velocity.x = 0
-      else:
-        player.velocity.x += player.staticFriction
-    elif player.velocity.x > 0:
-      if player.velocity.x - player.staticFriction < 0:
-        player.velocity.x = 0
-      else:
-        player.velocity.x -= player.staticFriction
-  elif player.state == States.Moving:
-    if player.velocity.x < 0:
-      if player.velocity.x + player.kineticFriction > 0:
-        player.velocity.x = 0
-      else:
-        player.velocity.x += player.kineticFriction
-    elif player.velocity.x > 0:
-      if player.velocity.x - player.kineticFriction < 0:
-        player.velocity.x = 0
-      else:
-        player.velocity.x -= player.kineticFriction
+proc playerFriction(player : Player, frictionType : char) =
+  case frictionType:
+    of 'g', 't': # grounded, turnaround
+      if player.velocity.x < 0:
+        if player.velocity.x + player.staticFriction > 0:
+          player.velocity.x = 0
+        else:
+          player.velocity.x += player.staticFriction
+      elif player.velocity.x > 0:
+        if player.velocity.x - player.staticFriction < 0:
+          player.velocity.x = 0
+        else:
+          player.velocity.x -= player.staticFriction
+    of 'm': # grounded moving
+      if player.velocity.x < 0:
+        if player.velocity.x + player.kineticFriction > 0:
+          player.velocity.x = 0
+        else:
+          player.velocity.x += player.kineticFriction
+      elif player.velocity.x > 0:
+        if player.velocity.x - player.kineticFriction < 0:
+          player.velocity.x = 0
+        else:
+          player.velocity.x -= player.kineticFriction
+    else:
+      echo "It will never come here. If it does, we have a problem."
 
 
 proc playerJump(player : Player, playerInput: PlayerInput) =
@@ -208,10 +212,19 @@ proc playerUpdateHitbox(player: Player) =
 proc gameUpdate(dt: float32) =
   playerSetInput(player, playerInput)
   playerSetStates(player, playerInput)
-  playerMoveX(player, playerInput)
-  playerFriction(player)
+  case player.state:
+    of States.Ground:
+      playerGravity(player)
+      playerFriction(player, 'g')
+    of States.Moving:
+      playerMoveX(player, playerInput)
+      playerFriction(player, 'm')
+      playerGravity(player)
+    of States.Turnaround:
+      playerMoveX(player, playerInput)
+      playerFriction(player, 't')
+      playerGravity(player)
   playerJump(player, playerInput)
-  playerGravity(player)
   playerCheckCollision(player, randomBox)
   playerApplyVelocity(player, dt)
   playerUpdateHitbox(player)

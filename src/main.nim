@@ -141,16 +141,6 @@ proc playerSetInput(player : Player, playerInput: PlayerInput) =
   playerInput.pressedRight = btn(pcRight)
   playerInput.jumpPressed = btnp(pcA)
 
-proc playerSetStates(player : Player, playerInput: PlayerInput) =
-  if (playerInput.pressedLeft or playerInput.pressedRight):
-    # the follow is to facilitate non slippery turnarounds.
-    if(playerInput.pressedRight != player.facingRight):
-      player.state = States.Turnaround
-      player.facingRight = playerInput.pressedRight
-    else:
-      player.state = States.Moving
-  else:
-    player.state = States.Ground
 
 proc playerMoveX(player : Player, playerInput: PlayerInput) =
   if playerInput.pressedLeft:
@@ -198,19 +188,40 @@ proc playerUpdateHitbox(player: Player) =
 
 proc gameUpdate(dt: float32) =
   playerSetInput(player, playerInput)
-  playerSetStates(player, playerInput)
   case player.state:
     of States.Ground:
       playerGravity(player)
       playerFriction(player)
+
+      if (playerInput.pressedLeft or playerInput.pressedRight):
+      # the follow is to facilitate non slippery turnarounds.
+        if(playerInput.pressedRight != player.facingRight):
+          player.state = States.Turnaround
+          player.facingRight = playerInput.pressedRight
+        else:
+          player.state = States.Moving
     of States.Moving:
       playerMoveX(player, playerInput)
       playerFriction(player)
       playerGravity(player)
+
+      if (playerInput.pressedLeft or playerInput.pressedRight):
+      # the follow is to facilitate non slippery turnarounds.
+        if(playerInput.pressedRight != player.facingRight):
+          player.state = States.Turnaround
+          player.facingRight = playerInput.pressedRight
+      else:
+        player.state = States.Ground
     of States.Turnaround:
       playerMoveX(player, playerInput)
       playerFriction(player)
       playerGravity(player)
+
+      if (playerInput.pressedLeft or playerInput.pressedRight):
+        player.state = States.Moving
+      else:
+        player.state = States.Ground
+
   playerJump(player, playerInput)
   playerCheckCollision(player, randomBox)
   playerApplyVelocity(player, dt)

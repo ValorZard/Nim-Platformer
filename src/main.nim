@@ -1,10 +1,11 @@
 import nico
 import bumpy
 import strformat
-
+import fpn
 # moves when you do - theme
 # control two platforming characters at the same time, and get them into their respective holes
 # this shouldn't be messy at all :)
+genQM_N(initQ22_10, 10, fixedPoint32)
 
 # player states
 type States {.pure.} = enum # can only use what i explicitly typed out
@@ -33,6 +34,8 @@ type
     airAccel: int
     maxAirSpeed: int
     jumpForce: int
+    airJumpsLeft: int
+    maxAirJumps: int
     terminalVelocity: int
     gravity: int
     # friction
@@ -42,6 +45,8 @@ type
 
   PlayerInput = ref object of RootObj
     pressedLeft, pressedRight, jumpPressed : bool
+
+# global variables (used for now)
 
 var player : Player
 var playerInput : PlayerInput
@@ -70,6 +75,9 @@ proc playerInit() =
     maxAirSpeed : 4,
 
     jumpForce : 10,
+    airJumpsLeft : 3,
+    maxAirJumps : 3,
+
     terminalVelocity : 3,
     gravity : 2,
 
@@ -155,7 +163,7 @@ proc playerFriction(player : Player) =
 
 
 proc playerJump(player : Player) =
-  player.velocity.y -= player.jumpForce
+  player.velocity.y = -player.jumpForce
 
 
 
@@ -177,16 +185,22 @@ proc playerUpdateHitbox(player: Player) =
   player.hitbox.transform.x = float player.position.x
   player.hitbox.transform.y = float player.position.y
 
-proc gameUpdate(dt: float32) =
+proc playerUpdate(player: Player, dt: float32) =
   playerSetInput(player, playerInput)
 
-  template changeToJump =
+  template changeToGroundJump =
     if (playerInput.jumpPressed):
-        player.state = States.Jump
+      player.state = States.Jump
+
+  template checkForAirJump =
+    if (player.airJumpsLeft > 0 and playerInput.jumpPressed):
+      player.airJumpsLeft -= 1
+      player.state = States.Jump
 
   template checkForGround =
     if playerCheckCollision(player, randomBox):
       player.state = States.Ground
+      player.airJumpsLeft = player.maxAirJumps
   
   template checkForAir = 
     if not playerCheckCollision(player, randomBox):
@@ -201,7 +215,7 @@ proc gameUpdate(dt: float32) =
         player.state = States.Moving
       
       checkForAir()
-      changeToJump()
+      changeToGroundJump()
     of States.Moving:
       playerMoveX(player, playerInput)
       playerFriction(player)
@@ -215,7 +229,7 @@ proc gameUpdate(dt: float32) =
         player.state = States.Ground
 
       checkForAir()
-      changeToJump()
+      changeToGroundJump()
     of States.Turnaround:
       playerMoveX(player, playerInput)
       playerFriction(player)
@@ -226,7 +240,7 @@ proc gameUpdate(dt: float32) =
         player.state = States.Ground
       
       checkForAir()
-      changeToJump()
+      changeToGroundJump()
     of States.Jump:
       playerJump(player)
       player.state = States.Air
@@ -239,6 +253,7 @@ proc gameUpdate(dt: float32) =
         player.state = States.AirMoving
       
       checkForGround()
+      checkForAirJump()
     of States.AirMoving:
       playerMoveX(player, playerInput)
       playerFriction(player)
@@ -248,9 +263,13 @@ proc gameUpdate(dt: float32) =
         player.state = States.Air
       
       checkForGround()
+      checkForAirJump()
   
   playerApplyVelocity(player, dt)
   playerUpdateHitbox(player)
+
+proc gameUpdate(dt: float32) =
+  playerUpdate(player, dt)
 
 
 proc drawPlayer() =

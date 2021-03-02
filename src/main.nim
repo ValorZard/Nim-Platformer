@@ -104,6 +104,8 @@ proc playerInit() =
 proc gameInit() =
   loadFont(0, "font.png")
 
+  fps(60)
+
   playerInit()
 
   # create hitbox
@@ -269,6 +271,7 @@ proc playerUpdate(player: Player, dt: float32) =
   playerUpdateHitbox(player)
 
 proc gameUpdate(dt: float32) =
+  let dt = 1/60 # fixed 6 frames a second
   playerUpdate(player, dt)
 
 

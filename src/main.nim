@@ -187,7 +187,7 @@ makeSystem("PlayerCheckCollision", [Player, Velocity, JumpComponent, Hitbox]):
   init: 
     sys.paused = true
   all:
-    hitboxCollision.player = item.entity
+    sysHitboxCollision.player = item.entity
     doHitboxCollision()
   finish:
     sys.paused = true
@@ -239,7 +239,7 @@ makeSystem("PlayerUpdate", [Player, PlayerInput, State, JumpComponent]):
         changeToGroundJump()
       of States.Moving:
         doPlayerMoveX()
-        doPlayerFriction(player)
+        doPlayerFriction()
 
         if (item.playerInput.pressedLeft or item.playerInput.pressedRight):
         # the follow is to facilitate non slippery turnarounds.

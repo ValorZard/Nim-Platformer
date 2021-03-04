@@ -206,12 +206,12 @@ makeSystem("PlayerUpdateHitbox", [Player, Position, Hitbox]):
   init:
     sys.paused = true
   all:
-    item.hitbox.transform.x = float item.position.x
-    item.hitbox.transform.y = float item.position.y
+    item.hitbox.transform.x = float item.position.position.x
+    item.hitbox.transform.y = float item.position.position.y
   finish:
     sys.paused = true
 
-makeSystem("PlayerUpdate", [Player, PlayerInput, State, JumpComponent]):
+makeSystem("PlayerUpdate", [Player, PlayerInput, FacingRight, State, JumpComponent]):
   init:
     sys.paused = true
   all:
@@ -241,9 +241,9 @@ makeSystem("PlayerUpdate", [Player, PlayerInput, State, JumpComponent]):
         doPlayerMoveX()
         doPlayerFriction()
 
-        if (item.playerInput.pressedLeft or item.playerInput.pressedRight):
+        if item.playerInput.pressedLeft or item.playerInput.pressedRight:
         # the follow is to facilitate non slippery turnarounds.
-          if(item.playerInput.pressedRight != item.facingRight.value):
+          if item.playerInput.pressedRight != item.facingRight.value:
             item.state.currentState = States.Turnaround
             item.facingRight.value = item.playerInput.pressedRight
         else:
@@ -299,14 +299,13 @@ commitSystems("run")
 
 # global variables (used for now)
 
-let 
-  player = newEntityWith(
+var player = newEntityWith(
       Position(
         position : Vec2i(
           x : screenWidth div 2,
           y : screenHeight div 2
-        ),
-      ),
+        )
+      )
     )
 
 #[

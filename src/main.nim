@@ -28,7 +28,8 @@ registerComponents(defaultComponentOptions):
     Hitbox = object
       transform : Rect
       isSolid : bool
-    FacingRight = distinct bool
+    FacingRight =  object
+      value : bool
     Velocity = object
       value : Vec2i
     Acceleration = object 
@@ -143,16 +144,22 @@ makeSystemOpts("HitboxCollision", [Hitbox], defaultSystemOptions):
     sys.paused = true
   all:
     var isColliding = false
-    if(item != player):
-      if(overlap(player.hitbox.transform, item.hitbox.transform)):
+    if(item.entity != sys.player):
+      # player is an entity so you'd have to fetch the hitbox from it.
+      let hitbox = sys.player.fetchComponent Hitbox
+      if(overlaps(hitbox.transform, item.hitbox.transform)):
         isColliding = true
     
+    let state = sys.player.fetchComponent State
+
     if isColliding:
-      player.velocity.value.y = 0 
-      player.state.currentState = States.Ground
-      player.jumpComponent.airJumpsleft = player.jumpComponent.maxAirJumps
+      let velocity = sys.player.fetchComponent Velocity
+      velocity.value.y = 0 
+      state.currentState = States.Ground
+      let jumpComponent = sys.player.fetchComponent JumpComponent
+      jumpComponent.airJumpsleft = jumpComponent.maxAirJumps
     else:
-      player.state.currentState = States.Air
+      state.currentState = States.Air
 
 
 #[
@@ -180,7 +187,7 @@ makeSystem("PlayerCheckCollision", [Player, Velocity, JumpComponent, Hitbox]):
   init: 
     sys.paused = true
   all:
-    hitboxCollision.player = item
+    hitboxCollision.player = item.entity
     doHitboxCollision()
   finish:
     sys.paused = true
@@ -236,9 +243,9 @@ makeSystem("PlayerUpdate", [Player, PlayerInput, State, JumpComponent]):
 
         if (item.playerInput.pressedLeft or item.playerInput.pressedRight):
         # the follow is to facilitate non slippery turnarounds.
-          if(item.playerInput.pressedRight != item.facingRight):
+          if(item.playerInput.pressedRight != item.facingRight.value):
             item.state.currentState = States.Turnaround
-            item.facingRight = item.playerInput.pressedRight
+            item.facingRight.value = item.playerInput.pressedRight
         else:
           item.state.currentState = States.Ground
 

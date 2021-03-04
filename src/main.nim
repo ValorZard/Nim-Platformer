@@ -291,6 +291,16 @@ makeSystem("PlayerUpdate", [Player, PlayerInput, FacingRight, State, JumpCompone
   finish:
     sys.paused = true
 
+makeSystem("DrawBox", [Position, Rectangle]):
+  init:
+    sys.paused = true
+  all:
+    #sets color of both text and box
+    setColor(3)
+
+    boxfill(item.position.position.x, item.position.position.y, item.rectangle.width, item.rectangle.height)
+  finish:
+    sys.paused = true
 # Seal and generate ECS
 makeEcs()
 commitSystems("run")
@@ -301,12 +311,92 @@ commitSystems("run")
 
 var player = newEntityWith(
       Position(
-        position : Vec2i(
-          x : screenWidth div 2,
-          y : screenHeight div 2
+        position : vec2i(
+          x = screenWidth div 2,
+          y = screenHeight div 2
         )
+      ),
+      Velocity(
+        value : vec2i(x = 0, y = 0)
       )
     )
+
+player.addComponent Rectangle(
+  width : 2,
+  height : 2
+)
+
+player.addComponent State(
+  currentState : States.Ground
+)
+
+player.addComponent FacingRight(
+  value : false
+)
+
+player.addComponent Acceleration(
+  groundAccel : 2,
+  maxGroundSpeed : 4,
+
+  airAccel : 2,
+  maxAirSpeed : 4
+)
+
+player.addComponent JumpComponent(
+  jumpForce : 10,
+  airJumpsLeft : 3,
+  maxAirJumps : 3
+)
+
+player.addComponent Gravity(
+  terminalVelocity : 3,
+  gravity : 2
+)
+
+player.addComponent Friction(
+  staticFriction : 5,
+  kineticFriction : 1,
+  drag : 1
+)
+
+player.addComponent Hitbox(
+  transform : Rect(
+      x : float32 screenWidth div 2,
+      y : float32 screenHeight div 2,
+      w : float32 2,
+      h : float32 2
+    ),
+  isSolid : true,
+)
+
+player.addComponent PlayerInput(
+  pressedLeft : false,
+  pressedRight : false,
+  jumpPressed : false
+)
+
+var randomBox = newEntityWith(
+    Hitbox(
+      transform : Rect(
+        x : 10,
+        y : 90,
+        w : 90,
+        h : 5,
+      ),
+      isSolid : true,
+    )
+  )
+
+randomBox.addComponent Position(
+  position : vec2i(
+        x = 10,
+        y = 90
+      )
+)
+
+randomBox.addComponent Rectangle(
+  width : 90, height : 5
+)
 
 #[
 proc playerInit() =
@@ -363,10 +453,9 @@ proc gameInit() =
 
   fps(60)
 
-  playerInit()
-
   # create hitbox
 
+  #[
   randomBox = RectHitbox(
     transform : Rect(
       x : 10,
@@ -376,30 +465,25 @@ proc gameInit() =
     ),
     isSolid : true,
   )
+  ]#
 
 proc gameUpdate(dt: float32) =
-  let dt = 1/60 # fixed 6 frames a second
-  playerUpdate(player, dt)
+  doPlayerUpdate()
 
-
-proc drawPlayer() =
-  boxfill(player.position.x, player.position.y, player.width, player.height)
 
 proc gameDraw() =
   cls()
 
-  #sets color of both text and box
-  setColor(3)
-  
   # render player
-  drawPlayer()
+  doDrawBox()
 
   # render random hitbox
-  boxfill(randomBox.transform.x, randomBox.transform.y, randomBox.transform.w, randomBox.transform.h)
+  # boxfill(randomBox.transform.x, randomBox.transform.y, randomBox.transform.w, randomBox.transform.h)
 
   # render text
+  #[
   var debugStr : string = fmt"Pos: ({player.position.x}, {player.position.y})"
-  case item.state.currentState:
+  case player.state.currentState:
     of States.Ground: debugStr.add("State: Ground")
     of States.Moving: debugStr.add("State: Moving")
     of States.Turnaround: debugStr.add("State: Turnaround")
@@ -407,6 +491,7 @@ proc gameDraw() =
     of States.Air: debugStr.add("State: Air")
     of States.AirMoving: debugStr.add("State: AirMoving")
   printc(debugStr, screenWidth div 2, 2)
+  ]#
 
 nico.init("myOrg", "myApp")
 nico.createWindow("myApp", 128, 128, 4, false)
